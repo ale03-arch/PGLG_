@@ -1,0 +1,613 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>Monitor</title>
+
+<style>
+*{
+margin:0;
+padding:0;
+box-sizing:border-box;
+font-family:Arial,sans-serif;
+}
+
+body{
+background:#111;
+color:white;
+padding:20px;
+}
+
+.container{
+max-width:900px;
+margin:auto;
+}
+
+h1{
+text-align:center;
+margin-bottom:20px;
+color:#ff4444;
+}
+
+.card{
+background:#1b1b1b;
+padding:20px;
+border-radius:12px;
+margin-bottom:20px;
+}
+
+input,textarea{
+width:100%;
+padding:12px;
+margin-top:5px;
+margin-bottom:15px;
+border:none;
+border-radius:8px;
+background:#2a2a2a;
+color:white;
+}
+
+button{
+width:100%;
+padding:12px;
+border:none;
+border-radius:8px;
+background:#cc2222;
+color:white;
+font-size:16px;
+cursor:pointer;
+}
+
+button:hover{
+background:#ff3333;
+}
+
+.hidden{
+display:none;
+}
+
+#today{
+font-size:22px;
+text-align:center;
+margin-bottom:15px;
+color:#ff6666;
+}
+
+canvas{
+width:100%;
+background:#0a0a0a;
+border-radius:12px;
+}
+
+.entry{
+background:#222;
+padding:10px;
+border-radius:8px;
+margin-bottom:10px;
+}
+</style>
+</head>
+<body>
+
+<div class="container">
+
+<h1>MONITOR</h1>
+
+<div id="setup" class="card">
+
+<label>Data Inizio</label>
+<input type="date" id="startDate">
+
+<label>Data Fine</label>
+<input type="date" id="endDate">
+
+<button onclick="startIteration()">
+Avvia
+</button>
+
+</div>
+
+<div id="monitor" class="hidden">
+
+<div class="card">
+
+<div id="today"></div>
+
+<label>Note</label>
+<textarea id="note"></textarea>
+
+<label>Punteggio (0-10)</label>
+<input type="number"
+min="0"
+max="10"
+id="score">
+
+<button onclick="saveDay()">
+Salva
+</button>
+
+</div>
+
+<div class="card">
+
+<h2>Storico</h2>
+
+<br>
+
+<div id="history"></div>
+
+</div>
+
+<div class="card">
+
+<h2>Grafico</h2>
+
+<br>
+
+<canvas id="graph"
+width="800"
+height="350"></canvas>
+
+</div>
+
+</div>
+
+<div id="finalScreen"
+class="hidden card">
+
+<h2>Iterazione Terminata</h2>
+
+<br>
+
+<div id="average"></div>
+
+<br>
+
+<button onclick="newIteration()">
+Nuova Iterazione
+</button>
+
+</div>
+
+</div>
+
+<script>
+
+let data =
+JSON.parse(localStorage.getItem("monitorData"))
+||
+{
+current:null,
+history:[],
+scores:[]
+};
+
+function saveStorage(){
+localStorage.setItem(
+"monitorData",
+JSON.stringify(data)
+);
+}
+
+function todayString(){
+
+let d = new Date();
+
+return d.getFullYear()+"-"
++(d.getMonth()+1)
+.toString()
+.padStart(2,"0")
++"-"+
+d.getDate()
+.toString()
+.padStart(2,"0");
+}
+
+function startIteration(){
+
+let start =
+document.getElementById(
+"startDate"
+).value;
+
+let end =
+document.getElementById(
+"endDate"
+).value;
+
+if(!start || !end){
+
+alert(
+"Inserire entrambe le date"
+);
+
+return;
+}
+
+data.current = {
+start:start,
+end:end,
+entries:[]
+};
+
+saveStorage();
+
+showMonitor();
+}
+
+function saveDay(){
+
+let date=todayString();
+
+let note=
+document.getElementById(
+"note"
+).value;
+
+let score=
+Number(
+document.getElementById(
+"score"
+).value
+);
+
+if(
+isNaN(score)
+||
+score<0
+||
+score>10
+){
+alert(
+"Inserire un valore tra 0 e 10"
+);
+return;
+}
+
+let exists =
+data.current.entries.find(
+e=>e.date===date
+);
+
+if(exists){
+
+alert(
+"Giornata già registrata."
+);
+
+return;
+}
+
+let entry={
+date:date,
+note:note,
+score:score
+};
+
+data.current.entries.push(
+entry
+);
+
+data.history.push(
+entry
+);
+
+data.scores.push(
+score
+);
+
+saveStorage();
+
+document.getElementById(
+"note"
+).value="";
+
+document.getElementById(
+"score"
+).value="";
+
+renderHistory();
+
+drawGraph();
+
+checkEnd();
+}
+
+function checkEnd(){
+
+if(
+todayString()
+>=
+data.current.end
+){
+
+let scores=
+data.current.entries.map(
+e=>e.score
+);
+
+let avg=
+scores.reduce(
+(a,b)=>a+b,0
+)
+/
+scores.length;
+
+document.getElementById(
+"monitor"
+).classList.add(
+"hidden"
+);
+
+document.getElementById(
+"finalScreen"
+).classList.remove(
+"hidden"
+);
+
+document.getElementById(
+"average"
+).innerHTML=
+"<h3>Media Finale: "
++
+avg.toFixed(2)
++
+"/10</h3>";
+}
+}
+
+function newIteration(){
+
+data.current=null;
+
+saveStorage();
+
+document.getElementById(
+"finalScreen"
+).classList.add(
+"hidden"
+);
+
+document.getElementById(
+"setup"
+).classList.remove(
+"hidden"
+);
+}
+
+function renderHistory(){
+
+let container =
+document.getElementById(
+"history"
+);
+
+container.innerHTML="";
+
+data.history.forEach(item=>{
+
+container.innerHTML +=
+
+`<div class="entry">
+
+<strong>${item.date}</strong>
+
+<br>
+
+Punteggio:
+${item.score}/10
+
+<br>
+
+${item.note}
+
+</div>`;
+
+});
+}
+
+function drawGraph(){
+
+let canvas =
+document.getElementById(
+"graph"
+);
+
+let ctx =
+canvas.getContext("2d");
+
+ctx.clearRect(
+0,
+0,
+canvas.width,
+canvas.height
+);
+
+ctx.fillStyle="#0a0a0a";
+
+ctx.fillRect(
+0,
+0,
+canvas.width,
+canvas.height
+);
+
+if(
+data.scores.length===0
+)
+return;
+
+const padding=50;
+
+ctx.strokeStyle="#333";
+
+for(
+let i=0;
+i<=10;
+i++
+){
+
+let y =
+canvas.height
+-
+padding
+-
+(
+i/10
+)
+*
+(
+canvas.height
+-
+padding*2
+);
+
+ctx.beginPath();
+
+ctx.moveTo(
+padding,
+y
+);
+
+ctx.lineTo(
+canvas.width-padding,
+y
+);
+
+ctx.stroke();
+}
+
+ctx.strokeStyle="red";
+ctx.lineWidth=3;
+
+ctx.beginPath();
+
+data.scores.forEach(
+(score,index)=>{
+
+let x =
+padding
++
+(
+index
+/
+Math.max(
+1,
+data.scores.length-1
+)
+)
+*
+(
+canvas.width
+-padding*2
+);
+
+let y =
+canvas.height
+-padding
+-
+(score/10)
+*
+(
+canvas.height
+-padding*2
+);
+
+if(index===0){
+
+ctx.moveTo(x,y);
+
+}else{
+
+ctx.lineTo(x,y);
+
+}
+
+}
+);
+
+ctx.stroke();
+
+data.scores.forEach(
+(score,index)=>{
+
+let x =
+padding
++
+(
+index
+/
+Math.max(
+1,
+data.scores.length-1
+)
+)
+*
+(
+canvas.width
+-padding*2
+);
+
+let y =
+canvas.height
+-padding
+-
+(score/10)
+*
+(
+canvas.height
+-padding*2
+);
+
+ctx.fillStyle="red";
+
+ctx.beginPath();
+
+ctx.arc(
+x,
+y,
+5,
+0,
+Math.PI*2
+);
+
+ctx.fill();
+}
+);
+}
+
+function showMonitor(){
+
+document.getElementById(
+"setup"
+).classList.add(
+"hidden"
+);
+
+document.getElementById(
+"monitor"
+).classList.remove(
+"hidden"
+);
+
+document.getElementById(
+"today"
+).innerText=
+todayString();
+
+renderHistory();
+
+drawGraph();
+}
+
+if(data.current){
+
+showMonitor();
+
+}
+</script>
+
+</body>
+</html>
